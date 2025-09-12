@@ -136,7 +136,7 @@ def home_page():
     with row1_col1:
         st.markdown("""
             <div class="feature-card">
-                <h3>🎯Main Margin Data</h3>
+                <h3>🔍Main Margin Data</h3>
                 <p>Easily identify which projects are driving profits and which projects require attention.</p>
             </div>
         """, unsafe_allow_html=True)
@@ -180,26 +180,28 @@ def home_page():
     with row2_col2:
         st.markdown("""
             <div class="feature-card">
-                <h3>📈Feature 5</h3>
-                <p>Under Development</p>
+                <h3>🏆Top Clients</h3>
+                <p>See a weekly and monthly ranking of top clients by revenue, volume, and margin to inform strategic decisions.</p>
             </div>
         """, unsafe_allow_html=True)
-        st.button("Under Development", disabled=True, key="feature_5")
+        st.button("Under Development", disabled=True, key="top_clients")
 
     with row2_col3:
         st.markdown("""
             <div class="feature-card">
-                <h3>📉Feature 6</h3>
-                <p>Under Development</p>
+                <h3>🎯SLA Calculation</h3>
+                <p>Ensure operational excellence by tracking SLA compliance for every project. Use this data to identify issues and drive quality improvements.</p>
             </div>
         """, unsafe_allow_html=True)
-        st.button("Under Development", disabled=True, key="feature_6")
+        if st.button("Access SLA Calculation", key="sla_calculation"):
+            st.session_state['page'] = 'sla_calculation'
+            st.rerun()
 
     with row3_col1:
         st.markdown("""
             <div class="feature-card">
-                <h3>🔍Feature 7</h3>
-                <p>Under Development</p>
+                <h3>🌿Carbon Reduced</h3>
+                <p>Accurately measure the cumulative distance covered by electric vehicles (EVs) in overall deliveries</p>
             </div>
         """, unsafe_allow_html=True)
         st.button("Under Development", disabled=True, key="feature_7")
@@ -207,7 +209,7 @@ def home_page():
     with row3_col2:
         st.markdown("""
             <div class="feature-card">
-                <h3>📋Feature 8</h3>
+                <h3>🔜Feature 8</h3>
                 <p>Under Development</p>
             </div>
         """, unsafe_allow_html=True)
@@ -216,7 +218,7 @@ def home_page():
     with row3_col3:
         st.markdown("""
             <div class="feature-card">
-                <h3>📋Feature 9</h3>
+                <h3>🔜Feature 9</h3>
                 <p>Under Development</p>
             </div>
         """, unsafe_allow_html=True)
@@ -1123,7 +1125,6 @@ def wow_performance_page():
         # Display the chart
         st.plotly_chart(fig, use_container_width=True)
 
-# Monthly Performance Page
 def monthly_performance_page():
     # Set page config with custom title and favicon
     favicon_base64 = get_base64_image('rideblitz_logo.jpeg')
@@ -1241,37 +1242,43 @@ def monthly_performance_page():
     df_grouped['Row Labels'] = df_grouped['Month'].astype(str)
     df_total['Row Labels'] = 'Total'
 
-    # Sort monthly data by month (assuming month names are in order or can be mapped)
+    # Sort monthly data by month
     month_order = ['January', 'February', 'March', 'April', 'May', 'June', 
                    'July', 'August', 'September', 'October', 'November', 'December']
     df_grouped['Month'] = pd.Categorical(df_grouped['Month'], categories=month_order, ordered=True)
     df_grouped.sort_values('Month', inplace=True)
 
-    # Add diff for the last two months if at least 2 months
-    if len(df_grouped) >= 2:
-        last_two_months = df_grouped.tail(2).copy()
-        second_last_month = last_two_months.iloc[0]
-        last_month = last_two_months.iloc[1]
+    # Add user-selected month comparison
+    st.sidebar.header('Compare Months')
+    available_months = df_grouped['Month'].tolist()
+    month_1 = st.sidebar.selectbox('Select First Month', available_months, index=0)
+    month_2 = st.sidebar.selectbox('Select Second Month', available_months, index=len(available_months)-1 if len(available_months) > 1 else 0)
+
+    if month_1 != month_2 and month_1 in df_grouped['Month'].values and month_2 in df_grouped['Month'].values:
+        month_1_data = df_grouped[df_grouped['Month'] == month_1].iloc[0]
+        month_2_data = df_grouped[df_grouped['Month'] == month_2].iloc[0]
+        
         diff_data = {}
         for col in ['Delivery_Volume', 'Total_Delivery_Revenue', 'Total_Revenue', 'Total_Cost',
                     'Profit_Value', 'Profit_Margins', 'SRPO', 'RCPO', 'TCOP']:
-            val_last = last_month[col]
-            val_second_last = second_last_month[col]
-            if val_second_last != 0 and not pd.isna(val_second_last):
-                diff_data[col] = ((val_last - val_second_last) / abs(val_second_last)) * 100
+            val_month_1 = month_1_data[col]
+            val_month_2 = month_2_data[col]
+            if val_month_1 != 0 and not pd.isna(val_month_1):
+                diff_data[col] = ((val_month_2 - val_month_1) / abs(val_month_1)) * 100
             else:
                 diff_data[col] = np.nan
+        
         diff_row = pd.Series(diff_data)
-        month_value = last_month['Month']
-        diff_row['Row Labels'] = f'Diff {month_value}%'
+        diff_row['Row Labels'] = f'Diff {month_1} to {month_2}%'
         diff_row['Month'] = ''
         for col in df_grouped.columns:
             if col not in diff_row.index:
                 diff_row[col] = np.nan
         diff_row = diff_row[df_grouped.columns]
-        # Insert diff at the end
-        df_grouped = pd.concat([df_grouped, pd.DataFrame([diff_row])], ignore_index=True)
         
+        # Append diff row to grouped data
+        df_grouped = pd.concat([df_grouped, pd.DataFrame([diff_row])], ignore_index=True)
+    
     # Combine total and monthly data
     final_df = pd.concat([df_total, df_grouped], ignore_index=True)
 
@@ -1372,6 +1379,549 @@ def monthly_performance_page():
         
         # Display the chart
         st.plotly_chart(fig, use_container_width=True)
+
+def sla_calculation_page():
+    # Set page config with custom title and favicon
+    favicon_base64 = get_base64_image('rideblitz_logo.jpeg')
+    st.set_page_config(
+        page_title="Blitz 3PL Margin Dashboard",
+        page_icon=f"data:image/jpeg;base64,{favicon_base64}" if favicon_base64 else None,
+        layout="wide"
+    )
+    display_logo()
+    st.title('🎯SLA Calculation')
+    st.markdown('Ensure operational excellence by tracking SLA compliance for every project. Use this data to identify issues and drive quality improvements.')
+    
+    # Add back and logout buttons
+    col1, col2 = st.columns([1, 1])
+    with col1:
+        if st.button("Back to Feature Selection"):
+            st.session_state['page'] = 'home'
+            st.rerun()
+    with col2:
+        st.button("Logout", on_click=logout, key="logout_sla_calculation")
+
+    # View selection
+    st.header('Select View')
+    view_option = st.radio("Choose a view:", ["Week (by Year)", "Month"], horizontal=True)
+
+    # Load data from Parquet if exists, otherwise convert from Excel
+    excel_path = 'Ops Data Collection.xlsx'
+    parquet_path = 'Ops Data Collection.parquet'
+    try:
+        convert_excel_to_parquet(excel_path, parquet_path)
+        df = pd.read_parquet(parquet_path)
+        df.columns = df.columns.str.strip()
+        st.info("Data loaded successfully from Parquet!")
+    except Exception as e:
+        st.error(f"Error loading data: {str(e)}")
+        st.stop()
+
+    # Pre-processing Data
+    currency_cols = [
+        'TOTAL DELIVERY REVENUE', 'Total Revenue', 'Selling Price (Regular Rate)',
+        'Additional Charge (KM, KG, Etc)', 'Return/Delivery Rate', 'Lalamove Bills (Invoicing to Client)',
+        'EV Reduction (3PL & KSJ)', 'EV Manpower', 'EV Revenue + Battery (Rental Client)',
+        'Claim/COD/Own Risk', 'Hub, COD Fee (SBY) & Service Korlap', 'Other Revenue',
+        'Attribute Fee', 'Rider Cost', 'Manpower Cost', 'OEM Cost', 'Mid-Mile/ Linehaul Cost',
+        'Add. 3PL Cost', 'DM Program', 'Claim Damaged/Loss', 'Outstanding COD',
+        'Claim Ownrisk', 'Attribute Cost', 'HUB Cost', 'Other Cost', 'Total Cost',
+        'Delivery Volume', '#Late', '#Late2'
+    ]
+
+    for col in currency_cols:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors='coerce')
+            mask = df[col].isna()
+            if mask.any():
+                df.loc[mask, col] = df.loc[mask, col].astype(str).str.replace('Rp', '', regex=False).str.replace(' ', '', regex=False).str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
+            df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+
+    if view_option == "Week (by Year)":
+        # Filters
+        st.sidebar.header('Filter Data')
+        all_years = sorted(df['Year'].unique())
+        selected_year = st.sidebar.selectbox('Year', all_years, index=0)
+
+        df_filtered_year = df[df['Year'] == selected_year]
+
+        all_sla_types = ['(All)'] + sorted(df_filtered_year['SLA Type'].unique())
+        selected_sla_type = st.sidebar.selectbox('SLA Type', all_sla_types)
+
+        df_filtered_sla = df_filtered_year.copy()
+        if selected_sla_type != '(All)':
+            df_filtered_sla = df_filtered_sla[df_filtered_sla['SLA Type'] == selected_sla_type]
+
+        all_teams = ['(All)'] + sorted(df_filtered_sla['Blitz Team'].unique())
+        selected_team = st.sidebar.selectbox('Blitz Team', all_teams)
+
+        df_filtered_team = df_filtered_sla.copy()
+        if selected_team != '(All)':
+            df_filtered_team = df_filtered_team[df_filtered_team['Blitz Team'] == selected_team]
+
+        all_locations = ['(All)'] + sorted(df_filtered_team['Client Location'].unique())
+        selected_location = st.sidebar.selectbox('Client Location', all_locations)
+
+        df_filtered_location = df_filtered_team.copy()
+        if selected_location != '(All)':
+            df_filtered_location = df_filtered_location[df_filtered_location['Client Location'] == selected_location]
+
+        all_clients = sorted(df_filtered_location['Client Name'].unique())
+        selected_client = st.sidebar.selectbox('Client Name', all_clients)
+
+        if not selected_client:
+            st.warning('Please select at least one Client Name to display the dashboard.')
+            st.stop()
+
+        df_filtered_client = df_filtered_location[df_filtered_location['Client Name'] == selected_client]
+        
+        all_projects = ['(All)'] + sorted(df_filtered_client['Project'].unique())
+        selected_project = st.sidebar.selectbox('Project', all_projects)
+
+        filtered_df = df_filtered_client.copy()
+        if selected_project != '(All)':
+            filtered_df = filtered_df[filtered_df['Project'] == selected_project]
+
+        if filtered_df.empty:
+            st.warning('Tidak ada data yang sesuai dengan filter yang dipilih.')
+            st.stop()
+
+        # Create Pivot Table
+        st.subheader('SLA Performance Week-by-Week')
+
+        group_by_cols = ['Client Name', 'Week (by Year)']
+        if selected_project != '(All)':
+            group_by_cols.append('Project')
+
+        df_grouped = filtered_df.groupby(group_by_cols).agg(
+            Delivery_Volume=('Delivery Volume', 'sum'),
+            Late_Order=('#Late', 'sum'),
+            Late_Order2=('#Late2', 'sum')
+        ).reset_index()
+
+        # Calculate Late Order (sum of #Late and #Late2)
+        df_grouped['Late_Order'] = df_grouped['Late_Order'] + df_grouped['Late_Order2']
+        df_grouped.drop(columns=['Late_Order2'], inplace=True)
+
+        # Calculate On Time Order and SLA Percentage
+        df_grouped['On_Time_Order'] = df_grouped['Delivery_Volume'] - df_grouped['Late_Order']
+        df_grouped['SLA_Percentage'] = (df_grouped['On_Time_Order'] / df_grouped['Delivery_Volume']).replace([np.inf, -np.inf], np.nan).fillna(0) * 100
+
+        # Calculate totals per Client (and Project if selected)
+        total_group_by = ['Client Name']
+        if selected_project != '(All)':
+            total_group_by.append('Project')
+
+        df_total_client = filtered_df.groupby(total_group_by).agg(
+            Delivery_Volume=('Delivery Volume', 'sum'),
+            Late_Order=('#Late', 'sum'),
+            Late_Order2=('#Late2', 'sum')
+        ).reset_index()
+
+        df_total_client['Late_Order'] = df_total_client['Late_Order'] + df_total_client['Late_Order2']
+        df_total_client.drop(columns=['Late_Order2'], inplace=True)
+        df_total_client['On_Time_Order'] = df_total_client['Delivery_Volume'] - df_total_client['Late_Order']
+        df_total_client['SLA_Percentage'] = (df_total_client['On_Time_Order'] / df_total_client['Delivery_Volume']).replace([np.inf, -np.inf], np.nan).fillna(0) * 100
+
+        # Combine weekly and total data with diff rows
+        final_df = pd.DataFrame()
+        for client in df_total_client['Client Name'].unique():
+            if selected_project != '(All)':
+                client_total_row = df_total_client[(df_total_client['Client Name'] == client) & (df_total_client['Project'] == selected_project)].copy()
+                client_weekly_data = df_grouped[(df_grouped['Client Name'] == client) & (df_grouped['Project'] == selected_project)].copy()
+                client_total_row['Row Labels'] = f"{client} - {selected_project}"
+                client_weekly_data['Row Labels'] = f"{client} - {selected_project}"
+            else:
+                client_total_row = df_total_client[df_total_client['Client Name'] == client].copy()
+                client_weekly_data = df_grouped[df_grouped['Client Name'] == client].copy()
+                client_total_row['Row Labels'] = client
+                client_weekly_data['Row Labels'] = client
+
+            client_total_row['Week (by Year)'] = 'Total'
+            
+            # Sort weekly data by week
+            client_weekly_data.sort_values('Week (by Year)', inplace=True)
+
+            # Add diff rows for last three weeks
+            if len(client_weekly_data) >= 3:
+                last_three_weeks = client_weekly_data.tail(3).copy()
+                third_last_week = last_three_weeks.iloc[0]
+                second_last_week = last_three_weeks.iloc[1]
+                last_week_orig = last_three_weeks.iloc[2]
+                diff_data_earlier = {}
+                for col in ['Delivery_Volume', 'SLA_Percentage']:
+                    val_second_last = second_last_week[col]
+                    val_third_last = third_last_week[col]
+                    if val_third_last != 0 and not pd.isna(val_third_last):
+                        diff_data_earlier[col] = ((val_second_last - val_third_last) / abs(val_third_last)) * 100
+                    else:
+                        diff_data_earlier[col] = np.nan
+                # Explicitly set diff for Late_Order and On_Time_Order to NaN
+                diff_data_earlier['Late_Order'] = np.nan
+                diff_data_earlier['On_Time_Order'] = np.nan
+                diff_row_earlier = pd.Series(diff_data_earlier)
+                week_value_earlier = str(second_last_week['Week (by Year)']).strip()
+                diff_row_earlier['Row Labels'] = f'Diff W{int(float(week_value_earlier))}%' if week_value_earlier.replace('.', '').replace('-', '').isdigit() else 'Diff WNA%'
+                diff_row_earlier['Week (by Year)'] = ''
+                for col in client_weekly_data.columns:
+                    if col not in diff_row_earlier.index:
+                        diff_row_earlier[col] = np.nan
+                diff_row_earlier = diff_row_earlier[client_weekly_data.columns]
+                insert_idx = client_weekly_data.index[client_weekly_data['Week (by Year)'] == second_last_week['Week (by Year)']].tolist()[-1] + 1
+                client_weekly_data = pd.concat([client_weekly_data.iloc[:insert_idx], pd.DataFrame([diff_row_earlier]), client_weekly_data.iloc[insert_idx:]], ignore_index=True)
+
+            if len(client_weekly_data) >= 2:
+                last_week = last_week_orig
+                second_last_week = client_weekly_data[client_weekly_data['Week (by Year)'] == last_week_orig['Week (by Year)'] - 1].iloc[0] if last_week_orig['Week (by Year)'] > 1 else client_weekly_data.iloc[-2]
+                diff_data = {}
+                for col in ['Delivery_Volume', 'SLA_Percentage']:
+                    val_last = last_week[col]
+                    val_second_last = second_last_week[col]
+                    if val_second_last != 0 and not pd.isna(val_second_last):
+                        diff_data[col] = ((val_last - val_second_last) / abs(val_second_last)) * 100
+                    else:
+                        diff_data[col] = np.nan
+                # Explicitly set diff for Late_Order and On_Time_Order to NaN
+                diff_data['Late_Order'] = np.nan
+                diff_data['On_Time_Order'] = np.nan
+                diff_row = pd.Series(diff_data)
+                week_value = str(last_week['Week (by Year)']).strip()
+                diff_row['Row Labels'] = f'Diff W{int(float(week_value))}%' if week_value.replace('.', '').replace('-', '').isdigit() else 'Diff WNA%'
+                diff_row['Week (by Year)'] = ''
+                for col in client_weekly_data.columns:
+                    if col not in diff_row.index:
+                        diff_row[col] = np.nan
+                diff_row = diff_row[client_weekly_data.columns]
+                insert_idx_last = client_weekly_data.index[client_weekly_data['Week (by Year)'] == last_week['Week (by Year)']].tolist()[-1] + 1
+                client_weekly_data = pd.concat([client_weekly_data.iloc[:insert_idx_last], pd.DataFrame([diff_row]), client_weekly_data.iloc[insert_idx_last:]], ignore_index=True)
+
+            if selected_project != '(All)':
+                client_total_row = client_total_row.drop(columns=['Project'])
+                client_weekly_data = client_weekly_data.drop(columns=['Project'])
+            client_total_row = client_total_row.drop(columns=['Client Name'])
+            client_weekly_data = client_weekly_data.drop(columns=['Client Name'])
+            
+            combined_data = pd.concat([client_total_row, client_weekly_data], ignore_index=True)
+            final_df = pd.concat([final_df, combined_data], ignore_index=True)
+
+        # Select and rename columns for display
+        final_df = final_df[[
+            'Row Labels', 'Week (by Year)', 'Delivery_Volume', 'Late_Order',
+            'On_Time_Order', 'SLA_Percentage'
+        ]]
+        final_df.columns = [
+            'Row Labels', 'Week (by Year)', 'Sum of Delivery Volume', 'Sum of Late Order',
+            'Sum of On Time Order', 'SLA Percentage'
+        ]
+
+        # Styling DataFrame
+        def color_rows(row):
+            is_total = 'Total' in str(row['Week (by Year)'])
+            is_diff = 'Diff W' in str(row['Row Labels'])
+            styles = [''] * len(row)
+            if is_total:
+                styles = ['background-color: #e6ffe6; color: black'] * len(row)
+            elif is_diff:
+                styles = ['background-color: #fff2e6; color: black'] * len(row)
+            return styles
+
+        # Format values for display
+        display_df = final_df.copy()
+        for col in display_df.columns:
+            if col == 'Row Labels':
+                display_df[col] = display_df[col].astype(str)
+            elif col == 'Week (by Year)':
+                display_df[col] = display_df[col].apply(lambda x: f"{int(float(x))}" if pd.notna(x) and str(x).replace('.', '').replace('-', '').isdigit() else x)
+            elif col == 'SLA Percentage':
+                display_df[col] = display_df.apply(
+                    lambda row: f"{row[col]:,.2f}%" if pd.notna(row[col]) else '', axis=1
+                )
+            else:
+                display_df[col] = display_df.apply(
+                    lambda row: f"{row[col]:,.2f}%" if pd.notna(row[col]) and 'Diff' in str(row['Row Labels']) else (
+                        f"{int(row[col]):,}" if pd.notna(row[col]) else ''
+                    ), axis=1
+                )
+            display_df[col] = display_df[col].astype(str).str.replace('nan', '', regex=False)
+
+        # Display styled dataframe
+        st.dataframe(
+            display_df.style.apply(color_rows, axis=1), 
+            hide_index=True
+        )
+
+        # Generate Chart
+        st.subheader('Generate Chart')
+        chart_columns = [
+            'Sum of Delivery Volume', 'Sum of Late Order', 'Sum of On Time Order', 'SLA Percentage'
+        ]
+        selected_chart_col = st.selectbox('Select Variable for Chart', chart_columns)
+        
+        if st.button('Generate Chart'):
+            chart_df = final_df[final_df['Row Labels'].str.contains(selected_client)]
+            chart_df = chart_df[~chart_df['Week (by Year)'].isin(['Total', ''])]
+            chart_df['Week (by Year)'] = pd.to_numeric(chart_df['Week (by Year)'], errors='coerce')
+            
+            if selected_chart_col == 'SLA Percentage':
+                fig = px.line(
+                    chart_df,
+                    x='Week (by Year)',
+                    y=selected_chart_col,
+                    title=f'{selected_chart_col} for {chart_df["Row Labels"].iloc[0]}',
+                    labels={'Week (by Year)': 'Week', selected_chart_col: selected_chart_col}
+                )
+            else:
+                fig = px.bar(
+                    chart_df,
+                    x='Week (by Year)',
+                    y=selected_chart_col,
+                    title=f'{selected_chart_col} for {chart_df["Row Labels"].iloc[0]}',
+                    labels={'Week (by Year)': 'Week', selected_chart_col: selected_chart_col}
+                )
+            
+            fig.update_layout(
+                xaxis_title='Week',
+                yaxis_title=selected_chart_col,
+                xaxis=dict(tickmode='linear', tick0=1, dtick=1),
+                yaxis=dict(zeroline=True, zerolinecolor='black', zerolinewidth=1),
+                showlegend=False
+            )
+            
+            st.plotly_chart(fig, use_container_width=True)
+    else:
+        # Filters
+        st.sidebar.header('Filter Data')
+        all_years = sorted(df['Year'].unique())
+        selected_year = st.sidebar.selectbox('Year', all_years, index=0)
+
+        df_filtered_year = df[df['Year'] == selected_year]
+
+        all_sla_types = ['(All)'] + sorted(df_filtered_year['SLA Type'].unique())
+        selected_sla_type = st.sidebar.selectbox('SLA Type', all_sla_types)
+
+        df_filtered_sla = df_filtered_year.copy()
+        if selected_sla_type != '(All)':
+            df_filtered_sla = df_filtered_sla[df_filtered_sla['SLA Type'] == selected_sla_type]
+
+        all_teams = ['(All)'] + sorted(df_filtered_sla['Blitz Team'].unique())
+        selected_team = st.sidebar.selectbox('Blitz Team', all_teams)
+
+        df_filtered_team = df_filtered_sla.copy()
+        if selected_team != '(All)':
+            df_filtered_team = df_filtered_team[df_filtered_team['Blitz Team'] == selected_team]
+
+        all_locations = ['(All)'] + sorted(df_filtered_team['Client Location'].unique())
+        selected_location = st.sidebar.selectbox('Client Location', all_locations)
+
+        df_filtered_location = df_filtered_team.copy()
+        if selected_location != '(All)':
+            df_filtered_location = df_filtered_location[df_filtered_location['Client Location'] == selected_location]
+
+        all_clients = sorted(df_filtered_location['Client Name'].unique())
+        selected_client = st.sidebar.selectbox('Client Name', all_clients)
+
+        if not selected_client:
+            st.warning('Please select at least one Client Name to display the dashboard.')
+            st.stop()
+
+        df_filtered_client = df_filtered_location[df_filtered_location['Client Name'] == selected_client]
+        
+        all_projects = ['(All)'] + sorted(df_filtered_client['Project'].unique())
+        selected_project = st.sidebar.selectbox('Project', all_projects)
+
+        filtered_df = df_filtered_client.copy()
+        if selected_project != '(All)':
+            filtered_df = filtered_df[filtered_df['Project'] == selected_project]
+
+        if filtered_df.empty:
+            st.warning('Tidak ada data yang sesuai dengan filter yang dipilih.')
+            st.stop()
+
+        # Create Pivot Table
+        st.subheader('SLA Performance Month-by-Month')
+
+        group_by_cols = ['Client Name', 'Month']
+        if selected_project != '(All)':
+            group_by_cols.append('Project')
+
+        df_grouped = filtered_df.groupby(group_by_cols).agg(
+            Delivery_Volume=('Delivery Volume', 'sum'),
+            Late_Order=('#Late', 'sum'),
+            Late_Order2=('#Late2', 'sum')
+        ).reset_index()
+
+        # Calculate Late Order (sum of #Late and #Late2)
+        df_grouped['Late_Order'] = df_grouped['Late_Order'] + df_grouped['Late_Order2']
+        df_grouped.drop(columns=['Late_Order2'], inplace=True)
+
+        # Calculate On Time Order and SLA Percentage
+        df_grouped['On_Time_Order'] = df_grouped['Delivery_Volume'] - df_grouped['Late_Order']
+        df_grouped['SLA_Percentage'] = (df_grouped['On_Time_Order'] / df_grouped['Delivery_Volume']).replace([np.inf, -np.inf], np.nan).fillna(0) * 100
+
+        # Calculate totals per Client (and Project if selected)
+        total_group_by = ['Client Name']
+        if selected_project != '(All)':
+            total_group_by.append('Project')
+
+        df_total_client = filtered_df.groupby(total_group_by).agg(
+            Delivery_Volume=('Delivery Volume', 'sum'),
+            Late_Order=('#Late', 'sum'),
+            Late_Order2=('#Late2', 'sum')
+        ).reset_index()
+
+        df_total_client['Late_Order'] = df_total_client['Late_Order'] + df_total_client['Late_Order2']
+        df_total_client.drop(columns=['Late_Order2'], inplace=True)
+        df_total_client['On_Time_Order'] = df_total_client['Delivery_Volume'] - df_total_client['Late_Order']
+        df_total_client['SLA_Percentage'] = (df_total_client['On_Time_Order'] / df_total_client['Delivery_Volume']).replace([np.inf, -np.inf], np.nan).fillna(0) * 100
+
+        # Month order for sorting
+        month_order = ['January', 'February', 'March', 'April', 'May', 'June', 
+                       'July', 'August', 'September', 'October', 'November', 'December']
+        df_grouped['Month'] = pd.Categorical(df_grouped['Month'], categories=month_order, ordered=True)
+        df_grouped.sort_values('Month', inplace=True)
+
+        # Add user-selected month comparison
+        st.sidebar.header('Compare Months')
+        available_months = df_grouped['Month'].tolist()
+        month_1 = st.sidebar.selectbox('Select First Month', available_months, index=0)
+        month_2 = st.sidebar.selectbox('Select Second Month', available_months, index=len(available_months)-1 if len(available_months) > 1 else 0)
+
+        # Combine weekly and total data with diff rows
+        final_df = pd.DataFrame()
+        for client in df_total_client['Client Name'].unique():
+            if selected_project != '(All)':
+                client_total_row = df_total_client[(df_total_client['Client Name'] == client) & (df_total_client['Project'] == selected_project)].copy()
+                client_monthly_data = df_grouped[(df_grouped['Client Name'] == client) & (df_grouped['Project'] == selected_project)].copy()
+                client_total_row['Row Labels'] = f"{client} - {selected_project}"
+                client_monthly_data['Row Labels'] = f"{client} - {selected_project}"
+            else:
+                client_total_row = df_total_client[df_total_client['Client Name'] == client].copy()
+                client_monthly_data = df_grouped[df_grouped['Client Name'] == client].copy()
+                client_total_row['Row Labels'] = client
+                client_monthly_data['Row Labels'] = client
+
+            client_total_row['Month'] = 'Total'
+            
+            # Sort monthly data by month
+            client_monthly_data.sort_values('Month', inplace=True)
+
+            # Add user-selected comparison diff
+            if month_1 != month_2 and month_1 in client_monthly_data['Month'].values and month_2 in client_monthly_data['Month'].values:
+                month_1_data = client_monthly_data[client_monthly_data['Month'] == month_1].iloc[0]
+                month_2_data = client_monthly_data[client_monthly_data['Month'] == month_2].iloc[0]
+                diff_data_user = {}
+                for col in ['Delivery_Volume', 'SLA_Percentage']:
+                    val_month_1 = month_1_data[col]
+                    val_month_2 = month_2_data[col]
+                    if val_month_1 != 0 and not pd.isna(val_month_1):
+                        diff_data_user[col] = ((val_month_2 - val_month_1) / abs(val_month_1)) * 100
+                    else:
+                        diff_data_user[col] = np.nan
+                diff_data_user['Late_Order'] = np.nan
+                diff_data_user['On_Time_Order'] = np.nan
+                diff_row_user = pd.Series(diff_data_user)
+                diff_row_user['Row Labels'] = f'Diff {month_1} to {month_2}%'
+                diff_row_user['Month'] = ''
+                for col in client_monthly_data.columns:
+                    if col not in diff_row_user.index:
+                        diff_row_user[col] = np.nan
+                diff_row_user = diff_row_user[client_monthly_data.columns]
+                client_monthly_data = pd.concat([client_monthly_data, pd.DataFrame([diff_row_user])], ignore_index=True)
+
+            if selected_project != '(All)':
+                client_total_row = client_total_row.drop(columns=['Project'])
+                client_monthly_data = client_monthly_data.drop(columns=['Project'])
+            client_total_row = client_total_row.drop(columns=['Client Name'])
+            client_monthly_data = client_monthly_data.drop(columns=['Client Name'])
+            
+            combined_data = pd.concat([client_total_row, client_monthly_data], ignore_index=True)
+            final_df = pd.concat([final_df, combined_data], ignore_index=True)
+
+        # Select and rename columns for display
+        final_df = final_df[[
+            'Row Labels', 'Month', 'Delivery_Volume', 'Late_Order',
+            'On_Time_Order', 'SLA_Percentage'
+        ]]
+        final_df.columns = [
+            'Row Labels', 'Month', 'Sum of Delivery Volume', 'Sum of Late Order',
+            'Sum of On Time Order', 'SLA Percentage'
+        ]
+
+        # Styling DataFrame
+        def color_rows(row):
+            is_total = 'Total' in str(row['Month'])
+            is_diff = 'Diff' in str(row['Row Labels'])
+            styles = [''] * len(row)
+            if is_total:
+                styles = ['background-color: #e6ffe6; color: black'] * len(row)
+            elif is_diff:
+                styles = ['background-color: #fff2e6; color: black'] * len(row)
+            return styles
+
+        # Format values for display
+        display_df = final_df.copy()
+        for col in display_df.columns:
+            if col == 'Row Labels':
+                display_df[col] = display_df[col].astype(str)
+            elif col == 'Month':
+                display_df[col] = display_df[col].astype(str)
+            elif col == 'SLA Percentage':
+                display_df[col] = display_df.apply(
+                    lambda row: f"{row[col]:,.2f}%" if pd.notna(row[col]) else '', axis=1
+                )
+            else:
+                display_df[col] = display_df.apply(
+                    lambda row: f"{row[col]:,.2f}%" if pd.notna(row[col]) and 'Diff' in str(row['Row Labels']) else (
+                        f"{int(row[col]):,}" if pd.notna(row[col]) else ''
+                    ), axis=1
+                )
+            display_df[col] = display_df[col].astype(str).str.replace('nan', '', regex=False)
+
+        # Display styled dataframe
+        st.dataframe(
+            display_df.style.apply(color_rows, axis=1), 
+            hide_index=True
+        )
+
+        # Generate Chart
+        st.subheader('Generate Chart')
+        chart_columns = [
+            'Sum of Delivery Volume', 'Sum of Late Order', 'Sum of On Time Order', 'SLA Percentage'
+        ]
+        selected_chart_col = st.selectbox('Select Variable for Chart', chart_columns)
+        
+        if st.button('Generate Chart'):
+            chart_df = final_df[final_df['Row Labels'].str.contains(selected_client, na=False)]
+            chart_df = chart_df[~chart_df['Month'].isin(['Total', ''])]
+            chart_df['Month'] = pd.Categorical(chart_df['Month'], categories=month_order, ordered=True)
+            chart_df = chart_df.sort_values('Month')
+            
+            if selected_chart_col == 'SLA Percentage':
+                fig = px.line(
+                    chart_df,
+                    x='Month',
+                    y=selected_chart_col,
+                    title=f'{selected_chart_col} for {chart_df["Row Labels"].iloc[0]}',
+                    labels={'Month': 'Month', selected_chart_col: selected_chart_col}
+                )
+            else:
+                fig = px.bar(
+                    chart_df,
+                    x='Month',
+                    y=selected_chart_col,
+                    title=f'{selected_chart_col} for {chart_df["Row Labels"].iloc[0]}',
+                    labels={'Month': 'Month', selected_chart_col: selected_chart_col}
+                )
+            
+            fig.update_layout(
+                xaxis_title='Month',
+                yaxis_title=selected_chart_col,
+                xaxis=dict(tickmode='array', tickvals=month_order),
+                yaxis=dict(zeroline=True, zerolinecolor='black', zerolinewidth=1),
+                showlegend=False
+            )
+            
+            st.plotly_chart(fig, use_container_width=True)
     
 # Main logic to switch between pages
 if st.session_state['page'] == 'login':
@@ -1386,3 +1936,5 @@ elif st.session_state['page'] == 'wow_performance':
     wow_performance_page()
 elif st.session_state['page'] == 'monthly_performance':
     monthly_performance_page()
+elif st.session_state['page'] == 'sla_calculation':
+    sla_calculation_page()
