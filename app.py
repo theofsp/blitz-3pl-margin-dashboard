@@ -181,10 +181,12 @@ def home_page():
         st.markdown("""
             <div class="feature-card">
                 <h3>🏆Top Clients</h3>
-                <p>See a weekly and monthly ranking of top clients by revenue, volume, and margin to inform strategic decisions.</p>
+                <p>See a weekly and monthly ranking of top clients by revenue, volume, margin and electrified delivery to inform strategic decisions.</p>
             </div>
         """, unsafe_allow_html=True)
-        st.button("Under Development", disabled=True, key="top_clients")
+        if st.button("Access Top Clients", key="top_clients"):
+            st.session_state['page'] = 'top_clients'
+            st.rerun()
 
     with row2_col3:
         st.markdown("""
@@ -204,7 +206,9 @@ def home_page():
                 <p>Accurately measure the cumulative distance covered by electric vehicles (EVs) in overall deliveries</p>
             </div>
         """, unsafe_allow_html=True)
-        st.button("Under Development", disabled=True, key="feature_7")
+        if st.button("Access Carbon Reduced", key="carbon_reduced"):
+            st.session_state['page'] = 'carbon_reduced'
+            st.rerun()
 
     with row3_col2:
         st.markdown("""
@@ -1922,6 +1926,558 @@ def sla_calculation_page():
             )
             
             st.plotly_chart(fig, use_container_width=True)
+
+def top_clients_page():
+    # Set page config with custom title and favicon
+    favicon_base64 = get_base64_image('rideblitz_logo.jpeg')
+    st.set_page_config(
+        page_title="Blitz 3PL Margin Dashboard",
+        page_icon=f"data:image/jpeg;base64,{favicon_base64}" if favicon_base64 else None,
+        layout="wide"
+    )
+    display_logo()
+    st.title('🏆Top Clients')
+    st.markdown('See a weekly and monthly ranking of top clients by revenue, volume, margin and electrified delivery to inform strategic decisions.')
+    
+    # Add back and logout buttons
+    col1, col2 = st.columns([1, 1])
+    with col1:
+        if st.button("Back to Feature Selection"):
+            st.session_state['page'] = 'home'
+            st.rerun()
+    with col2:
+        st.button("Logout", on_click=logout, key="logout_top_clients")
+
+    # View selection
+    st.header('Select View')
+    view_option = st.radio("Choose a view:", ["Week (by Year)", "Month"], horizontal=True)
+
+    # Load data from Parquet if exists, otherwise convert from Excel
+    excel_path = 'Ops Data Collection.xlsx'
+    parquet_path = 'Ops Data Collection.parquet'
+    try:
+        convert_excel_to_parquet(excel_path, parquet_path)
+        df = pd.read_parquet(parquet_path)
+        df.columns = df.columns.str.strip()
+        st.info("Data loaded successfully from Parquet!")
+    except Exception as e:
+        st.error(f"Error loading data: {str(e)}")
+        st.stop()
+
+    # Pre-processing Data
+    currency_cols = [
+        'TOTAL DELIVERY REVENUE', 'Total Revenue', 'Delivery Volume', 'Deliveries',
+        'Rider Cost', 'Total Cost'
+    ]
+    for col in currency_cols:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors='coerce')
+            mask = df[col].isna()
+            if mask.any():
+                df.loc[mask, col] = df.loc[mask, col].astype(str).str.replace('Rp', '', regex=False).str.replace(' ', '', regex=False).str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
+            df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+
+    # Calculate Profit Value
+    df['Profit_Value'] = df['Total Revenue'] - df['Total Cost']
+
+    # Filters
+    st.sidebar.header('Filter Data')
+    all_years = sorted(df['Year'].unique())
+    selected_year = st.sidebar.selectbox('Year', all_years, index=0)
+
+    df_filtered_year = df[df['Year'] == selected_year]
+
+    # Range selection based on view
+    if view_option == "Week (by Year)":
+        all_weeks = sorted(df_filtered_year['Week (by Year)'].unique())
+        if not all_weeks:
+            st.warning("No weeks available for the selected year.")
+            st.stop()
+        start_week = st.sidebar.selectbox('Start Week', all_weeks, index=0)
+        end_week = st.sidebar.selectbox('End Week', all_weeks, index=len(all_weeks)-1)
+        if start_week > end_week:
+            st.error("Start Week cannot be greater than End Week.")
+            st.stop()
+        filtered_df = df_filtered_year[(df_filtered_year['Week (by Year)'] >= start_week) & (df_filtered_year['Week (by Year)'] <= end_week)]
+    else:
+        month_order = ['January', 'February', 'March', 'April', 'May', 'June', 
+                       'July', 'August', 'September', 'October', 'November', 'December']
+        all_months = [m for m in month_order if m in df_filtered_year['Month'].unique()]
+        if not all_months:
+            st.warning("No months available for the selected year.")
+            st.stop()
+        start_month = st.sidebar.selectbox('Start Month', all_months, index=0)
+        end_month = st.sidebar.selectbox('End Month', all_months, index=len(all_months)-1)
+        start_idx = month_order.index(start_month)
+        end_idx = month_order.index(end_month)
+        if start_idx > end_idx:
+            st.error("Start Month cannot be after End Month.")
+            st.stop()
+        selected_months = month_order[start_idx:end_idx + 1]
+        filtered_df = df_filtered_year[df_filtered_year['Month'].isin(selected_months)]
+
+    if filtered_df.empty:
+        st.warning('No data matches the selected filters.')
+        st.stop()
+
+    # Additional Filters
+    business_level = st.sidebar.selectbox('Business Level', ['Client Name', 'Project'], index=0)
+    all_teams = ['(All)'] + sorted(filtered_df['Blitz Team'].unique())
+    selected_team = st.sidebar.selectbox('Blitz Team', all_teams)
+    filtered_df_team = filtered_df.copy()
+    if selected_team != '(All)':
+        filtered_df_team = filtered_df_team[filtered_df_team['Blitz Team'] == selected_team]
+
+    all_locations = ['(All)'] + sorted(filtered_df_team['Client Location'].unique())
+    selected_location = st.sidebar.selectbox('Client Location', all_locations)
+    filtered_df_location = filtered_df_team.copy()
+    if selected_location != '(All)':
+        filtered_df_location = filtered_df_location[filtered_df_location['Client Location'] == selected_location]
+
+    if filtered_df_location.empty:
+        st.warning('No data matches the selected filters.')
+        st.stop()
+
+    # Select performance metric
+    st.subheader('Select Performance Metric')
+    performance_metric = st.selectbox('Based on', [
+        'Total Order Qty', 'Total Revenue', 'Total Margin', 'Total Electrified Order'
+    ])
+
+    # Group data
+    group_by_col = business_level
+    df_grouped = filtered_df_location.groupby(group_by_col).agg(
+        Total_Order_Qty=('Delivery Volume', 'sum'),
+        Total_Revenue=('Total Revenue', 'sum'),
+        Total_Margin=('Profit_Value', 'sum'),
+        Total_Electrified_Order=('Deliveries', 'sum')
+    ).reset_index()
+
+    # Sort and select top 10 based on selected metric
+    metric_mapping = {
+        'Total Order Qty': 'Total_Order_Qty',
+        'Total Revenue': 'Total_Revenue',
+        'Total Margin': 'Total_Margin',
+        'Total Electrified Order': 'Total_Electrified_Order'
+    }
+    sort_col = metric_mapping[performance_metric]
+    df_top_10 = df_grouped.sort_values(by=sort_col, ascending=False).head(10)
+
+    # Reorder columns based on performance metric
+    if performance_metric == 'Total Order Qty':
+        display_cols = [group_by_col, 'Total_Order_Qty', 'Total_Revenue', 'Total_Margin', 'Total_Electrified_Order']
+        final_cols = [business_level, 'Sum of Total Order Qty', 'Sum of Total Revenue', 'Sum of Total Margin', 'Sum of Total Electrified Order']
+    elif performance_metric == 'Total Revenue':
+        display_cols = [group_by_col, 'Total_Revenue', 'Total_Order_Qty', 'Total_Margin', 'Total_Electrified_Order']
+        final_cols = [business_level, 'Sum of Total Revenue', 'Sum of Total Order Qty', 'Sum of Total Margin', 'Sum of Total Electrified Order']
+    elif performance_metric == 'Total Margin':
+        display_cols = [group_by_col, 'Total_Margin', 'Total_Order_Qty', 'Total_Revenue', 'Total_Electrified_Order']
+        final_cols = [business_level, 'Sum of Total Margin', 'Sum of Total Order Qty', 'Sum of Total Revenue', 'Sum of Total Electrified Order']
+    else:  # Total Electrified Order
+        display_cols = [group_by_col, 'Total_Electrified_Order', 'Total_Order_Qty', 'Total_Revenue', 'Total_Margin']
+        final_cols = [business_level, 'Sum of Total Electrified Order', 'Sum of Total Order Qty', 'Sum of Total Revenue', 'Sum of Total Margin']
+
+    df_display = df_top_10[display_cols].copy()
+    df_display.columns = final_cols
+
+    # Format values for display
+    display_df = df_display.copy()
+    for col in display_df.columns:
+        if col == business_level:
+            display_df[col] = display_df[col].astype(str)
+        elif col in ['Sum of Total Revenue', 'Sum of Total Margin']:
+            display_df[col] = display_df[col].apply(lambda x: f"Rp {x:,.0f}" if pd.notna(x) else '')
+        else:
+            display_df[col] = display_df[col].apply(lambda x: f"{int(x):,}" if pd.notna(x) else '')
+
+    # Display styled dataframe
+    st.subheader(f'Top 10 {business_level}s by {performance_metric}')
+    st.dataframe(
+        display_df.style.set_properties(**{'background-color': '#f9f9f9', 'color': 'black'}),
+        hide_index=True
+    )
+
+    # Generate Chart
+    st.subheader('Generate Chart')
+    chart_columns = final_cols[1:]  # Exclude the business_level column
+    selected_chart_col = st.selectbox('Select Variable for Chart', chart_columns)
+    
+    if st.button('Generate Chart'):
+        chart_df = df_display.copy()
+        chart_df[selected_chart_col] = df_top_10[display_cols[chart_columns.index(selected_chart_col) + 1]]  # Map back to original values
+        fig = px.bar(
+            chart_df,
+            x=business_level,
+            y=selected_chart_col,
+            title=f'{selected_chart_col} for Top 10 {business_level}s',
+            labels={business_level: business_level, selected_chart_col: selected_chart_col}
+        )
+        fig.update_layout(
+            xaxis_title=business_level,
+            yaxis_title=selected_chart_col,
+            xaxis={'tickangle': 45},
+            yaxis=dict(zeroline=True, zerolinecolor='black', zerolinewidth=1),
+            showlegend=False
+        )
+        st.plotly_chart(fig, use_container_width=True)
+
+def carbon_reduced_page():
+    # Set page config with custom title and favicon
+    favicon_base64 = get_base64_image('rideblitz_logo.jpeg')
+    st.set_page_config(
+        page_title="Blitz 3PL Margin Dashboard",
+        page_icon=f"data:image/jpeg;base64,{favicon_base64}" if favicon_base64 else None,
+        layout="wide"
+    )
+    display_logo()
+    st.title('🌿Carbon Reduced')
+    st.markdown('Accurately measure the cumulative distance covered by electric vehicles (EVs) in overall deliveries.')
+    
+    # Add reference text
+    st.markdown("""
+        🌍 **Calculation Method:**  
+        ⛽ 0.046 kg CO2/KM (based on U.S. Environmental Protection Agency (EPA) calculation)  
+        ⚡ 0.0225 kg CO2/KM (based on PT PLN (Persero) & IESR (Institute for Essential Services Reform) data)
+    """)
+
+    # Add back and logout buttons
+    col1, col2 = st.columns([1, 1])
+    with col1:
+        if st.button("Back to Feature Selection"):
+            st.session_state['page'] = 'home'
+            st.rerun()
+    with col2:
+        st.button("Logout", on_click=logout, key="logout_carbon_reduced")
+
+    # View selection
+    st.header('Select View')
+    view_option = st.radio("Choose a view:", ["Week (by Year)", "Month"], horizontal=True)
+
+    # Load data from Parquet if exists, otherwise convert from Excel
+    excel_path = 'Ops Data Collection.xlsx'
+    parquet_path = 'Ops Data Collection.parquet'
+    try:
+        convert_excel_to_parquet(excel_path, parquet_path)
+        df = pd.read_parquet(parquet_path)
+        df.columns = df.columns.str.strip()
+        st.info("Data loaded successfully from Parquet!")
+    except Exception as e:
+        st.error(f"Error loading data: {str(e)}")
+        st.stop()
+
+    # Pre-processing Data
+    currency_cols = [
+        'Delivery Volume', 'Deliveries', 'Distance (KM)', 'Distance (KM)2'
+    ]
+    for col in currency_cols:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+
+    # Calculate Total Distance
+    df['Total_Distance'] = df['Distance (KM)'] + df['Distance (KM)2']
+
+    # Month order for sorting
+    month_order = ['January', 'February', 'March', 'April', 'May', 'June', 
+                   'July', 'August', 'September', 'October', 'November', 'December']
+
+    # Filters
+    st.sidebar.header('Filter Data')
+    all_years = sorted(df['Year'].unique())
+    selected_year = st.sidebar.selectbox('Year', all_years, index=0)
+
+    df_filtered_year = df[df['Year'] == selected_year]
+
+    # Display dynamic CO2 prevented text
+    total_co2_prevented = (df_filtered_year['Distance (KM)'] * 0.046).sum()
+    st.markdown(f"🌿 In {selected_year}, electric delivery by Blitz already prevent CO2 by {total_co2_prevented:,.0f} KG.⚡")
+
+    all_teams = ['(All)'] + sorted(df_filtered_year['Blitz Team'].unique())
+    selected_team = st.sidebar.selectbox('Blitz Team', all_teams)
+
+    df_filtered_team = df_filtered_year.copy()
+    if selected_team != '(All)':
+        df_filtered_team = df_filtered_team[df_filtered_team['Blitz Team'] == selected_team]
+
+    all_locations = ['(All)'] + sorted(df_filtered_team['Client Location'].unique())
+    selected_location = st.sidebar.selectbox('Client Location', all_locations)
+
+    df_filtered_location = df_filtered_team.copy()
+    if selected_location != '(All)':
+        df_filtered_location = df_filtered_location[df_filtered_location['Client Location'] == selected_location]
+
+    all_clients = sorted(df_filtered_location['Client Name'].unique())
+    selected_client = st.sidebar.selectbox('Client Name', all_clients)
+
+    if not selected_client:
+        st.warning('Please select at least one Client Name to display the dashboard.')
+        st.stop()
+
+    df_filtered_client = df_filtered_location[df_filtered_location['Client Name'] == selected_client]
+    
+    all_projects = ['(All)'] + sorted(df_filtered_client['Project'].unique())
+    selected_project = st.sidebar.selectbox('Project', all_projects)
+
+    # Compare Months filter for Month view
+    compare_month = None
+    if view_option == "Month":
+        all_months = [m for m in month_order if m in df_filtered_client['Month'].unique()]
+        compare_month = st.sidebar.selectbox('Compare Months', ['(All)'] + all_months)
+
+    filtered_df = df_filtered_client.copy()
+    if selected_project != '(All)':
+        filtered_df = filtered_df[filtered_df['Project'] == selected_project]
+
+    if filtered_df.empty:
+        st.warning('Tidak ada data yang sesuai dengan filter yang dipilih.')
+        st.stop()
+
+    # Create Pivot Table
+    st.subheader(f'Carbon Reduced {"Week-by-Week" if view_option == "Week (by Year)" else "Month-by-Month"}')
+
+    # Group data based on view
+    group_by_cols = ['Client Name']
+    time_col = 'Week (by Year)' if view_option == 'Week (by Year)' else 'Month'
+    group_by_cols.append(time_col)
+    if selected_project != '(All)':
+        group_by_cols.append('Project')
+
+    df_grouped = filtered_df.groupby(group_by_cols).agg(
+        Total_Electrified_Order=('Deliveries', 'sum'),
+        Total_Order_Qty=('Delivery Volume', 'sum'),
+        Total_Electrified_Distance=('Distance (KM)', 'sum'),
+        Total_Distance=('Total_Distance', 'sum')
+    ).reset_index()
+
+    # Calculate percentages and CO2 prevented
+    df_grouped['Total_Electrified_Order%'] = (df_grouped['Total_Electrified_Order'] / df_grouped['Total_Order_Qty']).replace([np.inf, -np.inf], np.nan).fillna(0) * 100
+    df_grouped['Total_Electrified_Distance%'] = (df_grouped['Total_Electrified_Distance'] / df_grouped['Total_Distance']).replace([np.inf, -np.inf], np.nan).fillna(0) * 100
+    df_grouped['Total_CO2_Prevented'] = df_grouped['Total_Electrified_Distance'] * 0.046
+
+    # Calculate totals per Client (and Project if selected)
+    total_group_by = ['Client Name']
+    if selected_project != '(All)':
+        total_group_by.append('Project')
+
+    df_total_client = filtered_df.groupby(total_group_by).agg(
+        Total_Electrified_Order=('Deliveries', 'sum'),
+        Total_Order_Qty=('Delivery Volume', 'sum'),
+        Total_Electrified_Distance=('Distance (KM)', 'sum'),
+        Total_Distance=('Total_Distance', 'sum')
+    ).reset_index()
+
+    df_total_client['Total_Electrified_Order%'] = (df_total_client['Total_Electrified_Order'] / df_total_client['Total_Order_Qty']).replace([np.inf, -np.inf], np.nan).fillna(0) * 100
+    df_total_client['Total_Electrified_Distance%'] = (df_total_client['Total_Electrified_Distance'] / df_total_client['Total_Distance']).replace([np.inf, -np.inf], np.nan).fillna(0) * 100
+    df_total_client['Total_CO2_Prevented'] = df_total_client['Total_Electrified_Distance'] * 0.046
+
+    # Combine weekly/monthly and total data with diff rows
+    final_df = pd.DataFrame()
+    for client in df_total_client['Client Name'].unique():
+        if selected_project != '(All)':
+            client_total_row = df_total_client[(df_total_client['Client Name'] == client) & (df_total_client['Project'] == selected_project)].copy()
+            client_time_data = df_grouped[(df_grouped['Client Name'] == client) & (df_grouped['Project'] == selected_project)].copy()
+            client_total_row['Row Labels'] = f"{client} - {selected_project}"
+            client_time_data['Row Labels'] = f"{client} - {selected_project}"
+        else:
+            client_total_row = df_total_client[df_total_client['Client Name'] == client].copy()
+            client_time_data = df_grouped[df_grouped['Client Name'] == client].copy()
+            client_total_row['Row Labels'] = client
+            client_time_data['Row Labels'] = client
+
+        client_total_row[time_col] = 'Total'
+        
+        # Sort data by time
+        if view_option == 'Week (by Year)':
+            client_time_data.sort_values('Week (by Year)', inplace=True)
+        else:
+            client_time_data['Month'] = pd.Categorical(client_time_data['Month'], categories=month_order, ordered=True)
+            client_time_data.sort_values('Month', inplace=True)
+
+        # Add diff rows
+        if len(client_time_data) >= 2:
+            if view_option == 'Week (by Year)':
+                last_three = client_time_data.tail(3).copy()
+                third_last = last_three.iloc[0]
+                second_last = last_three.iloc[1]
+                last = last_three.iloc[2]
+                # Diff for third to second last
+                diff_data_earlier = {}
+                for col in ['Total_Electrified_Order', 'Total_Order_Qty', 'Total_Electrified_Order%',
+                            'Total_Electrified_Distance', 'Total_Distance', 'Total_Electrified_Distance%', 'Total_CO2_Prevented']:
+                    val_second_last = second_last[col]
+                    val_third_last = third_last[col]
+                    if val_third_last != 0 and not pd.isna(val_third_last):
+                        diff_data_earlier[col] = ((val_second_last - val_third_last) / abs(val_third_last)) * 100
+                    else:
+                        diff_data_earlier[col] = np.nan
+                diff_row_earlier = pd.Series(diff_data_earlier)
+                time_value_earlier = str(second_last[time_col]).strip()
+                if time_value_earlier.replace('.', '').replace('-', '').isdigit():
+                    diff_row_earlier['Row Labels'] = f'Diff W{int(float(time_value_earlier))}%'
+                else:
+                    diff_row_earlier['Row Labels'] = f'Diff {time_value_earlier}%'
+                diff_row_earlier[time_col] = ''
+                for col in client_time_data.columns:
+                    if col not in diff_row_earlier.index:
+                        diff_row_earlier[col] = np.nan
+                diff_row_earlier = diff_row_earlier[client_time_data.columns]
+                insert_idx = client_time_data.index[client_time_data[time_col] == second_last[time_col]].tolist()[-1] + 1
+                client_time_data = pd.concat([client_time_data.iloc[:insert_idx], pd.DataFrame([diff_row_earlier]), client_time_data.iloc[insert_idx:]], ignore_index=True)
+                
+                # Diff for second to last
+                diff_data = {}
+                for col in ['Total_Electrified_Order', 'Total_Order_Qty', 'Total_Electrified_Order%',
+                            'Total_Electrified_Distance', 'Total_Distance', 'Total_Electrified_Distance%', 'Total_CO2_Prevented']:
+                    val_last = last[col]
+                    val_second_last = second_last[col]
+                    if val_second_last != 0 and not pd.isna(val_second_last):
+                        diff_data[col] = ((val_last - val_second_last) / abs(val_second_last)) * 100
+                    else:
+                        diff_data[col] = np.nan
+                diff_row = pd.Series(diff_data)
+                time_value = str(last[time_col]).strip()
+                if time_value.replace('.', '').replace('-', '').isdigit():
+                    diff_row['Row Labels'] = f'Diff W{int(float(time_value))}%'
+                else:
+                    diff_row['Row Labels'] = f'Diff {time_value}%'
+                diff_row[time_col] = ''
+                for col in client_time_data.columns:
+                    if col not in diff_row.index:
+                        diff_row[col] = np.nan
+                diff_row = diff_row[client_time_data.columns]
+                insert_idx_last = client_time_data.index[client_time_data[time_col] == last[time_col]].tolist()[-1] + 1
+                client_time_data = pd.concat([client_time_data.iloc[:insert_idx_last], pd.DataFrame([diff_row]), client_time_data.iloc[insert_idx_last:]], ignore_index=True)
+            else:  # Month view
+                if compare_month and compare_month != '(All)' and compare_month in client_time_data['Month'].values:
+                    compare_data = client_time_data[client_time_data['Month'] == compare_month].iloc[0]
+                    last = client_time_data.tail(1).iloc[0]
+                    diff_data = {}
+                    for col in ['Total_Electrified_Order', 'Total_Order_Qty', 'Total_Electrified_Order%',
+                                'Total_Electrified_Distance', 'Total_Distance', 'Total_Electrified_Distance%', 'Total_CO2_Prevented']:
+                        val_last = last[col]
+                        val_compare = compare_data[col]
+                        if val_compare != 0 and not pd.isna(val_compare):
+                            diff_data[col] = ((val_last - val_compare) / abs(val_compare)) * 100
+                        else:
+                            diff_data[col] = np.nan
+                    diff_row = pd.Series(diff_data)
+                    diff_row['Row Labels'] = f'Diff {compare_month}%'
+                    diff_row[time_col] = ''
+                    for col in client_time_data.columns:
+                        if col not in diff_row.index:
+                            diff_row[col] = np.nan
+                    diff_row = diff_row[client_time_data.columns]
+                    client_time_data = pd.concat([client_time_data, pd.DataFrame([diff_row])], ignore_index=True)
+
+        if selected_project != '(All)':
+            client_total_row = client_total_row.drop(columns=['Project'])
+            client_time_data = client_time_data.drop(columns=['Project'])
+        client_total_row = client_total_row.drop(columns=['Client Name'])
+        client_time_data = client_time_data.drop(columns=['Client Name'])
+        
+        combined_data = pd.concat([client_total_row, client_time_data], ignore_index=True)
+        final_df = pd.concat([final_df, combined_data], ignore_index=True)
+
+    # Select and rename columns for display
+    final_df = final_df[[
+        'Row Labels', time_col, 'Total_Electrified_Order', 'Total_Order_Qty', 'Total_Electrified_Order%',
+        'Total_Electrified_Distance', 'Total_Distance', 'Total_Electrified_Distance%', 'Total_CO2_Prevented'
+    ]]
+    final_df.columns = [
+        'Row Labels', time_col, 'Sum of Total Electrified Order', 'Sum of Total Order Qty', 'Sum of Total Electrified Order%',
+        'Sum of Total Electrified Distance', 'Sum of Total Distance', 'Sum of Total Electrified Distance%', 'Sum of Total CO2 Prevented'
+    ]
+
+    # Styling DataFrame
+    def color_rows(row):
+        is_total = 'Total' in str(row[time_col])
+        is_diff = 'Diff' in str(row['Row Labels'])
+        styles = [''] * len(row)
+        if is_total:
+            styles = ['background-color: #e6ffe6; color: black'] * len(row)
+        elif is_diff:
+            styles = ['background-color: #fff2e6; color: black'] * len(row)
+        return styles
+
+    # Format values for display
+    display_df = final_df.copy()
+    for col in display_df.columns:
+        if col in ['Row Labels', time_col]:
+            display_df[col] = display_df[col].astype(str)
+        elif col == 'Sum of Total CO2 Prevented':
+            display_df[col] = display_df.apply(
+                lambda row: f"{row[col]:,.2f}%" if pd.notna(row[col]) and 'Diff' in str(row['Row Labels']) else (
+                    f"{row[col]:,.0f} kg CO2" if pd.notna(row[col]) else ''
+                ), axis=1
+            )
+        elif col in ['Sum of Total Electrified Order%', 'Sum of Total Electrified Distance%']:
+            display_df[col] = display_df.apply(
+                lambda row: f"{row[col]:,.2f}%" if pd.notna(row[col]) else '', axis=1
+            )
+        else:
+            display_df[col] = display_df.apply(
+                lambda row: f"{row[col]:,.2f}%" if pd.notna(row[col]) and 'Diff' in str(row['Row Labels']) else (
+                    f"{int(row[col]):,}" if pd.notna(row[col]) else ''
+                ), axis=1
+            )
+        display_df[col] = display_df[col].astype(str).str.replace('nan', '', regex=False)
+
+    # Display styled dataframe
+    st.dataframe(
+        display_df.style.apply(color_rows, axis=1), 
+        hide_index=True
+    )
+
+    # Display total CO2 prevented for the table
+    total_co2_table = final_df[final_df[time_col] != 'Total']['Sum of Total CO2 Prevented'].sum()
+    business_level_display = selected_project if selected_project != '(All)' else selected_client
+    st.markdown(f"🌿 Blitz with {business_level_display} already prevent CO2 by {total_co2_table:,.0f} KG of CO2.⚡")
+
+    # Generate Chart
+    st.subheader('Generate Chart')
+    chart_columns = [
+        'Sum of Total Electrified Order', 'Sum of Total Order Qty', 'Sum of Total Electrified Order%',
+        'Sum of Total Electrified Distance', 'Sum of Total Distance', 'Sum of Total Electrified Distance%',
+        'Sum of Total CO2 Prevented'
+    ]
+    selected_chart_col = st.selectbox('Select Variable for Chart', chart_columns)
+    
+    if st.button('Generate Chart'):
+        chart_df = final_df[final_df['Row Labels'].str.contains(selected_client, na=False)]
+        chart_df = chart_df[~chart_df[time_col].isin(['Total', ''])]
+        if view_option == 'Week (by Year)':
+            chart_df[time_col] = pd.to_numeric(chart_df[time_col], errors='coerce')
+            fig = px.line(
+                chart_df,
+                x=time_col,
+                y=selected_chart_col,
+                title=f'{selected_chart_col} for {chart_df["Row Labels"].iloc[0]}',
+                labels={time_col: 'Week', selected_chart_col: selected_chart_col}
+            )
+            fig.update_layout(
+                xaxis_title='Week',
+                yaxis_title=selected_chart_col,
+                xaxis=dict(tickmode='linear', tick0=1, dtick=1),
+                yaxis=dict(zeroline=True, zerolinecolor='black', zerolinewidth=1),
+                showlegend=False
+            )
+        else:
+            chart_df[time_col] = pd.Categorical(chart_df[time_col], categories=month_order, ordered=True)
+            chart_df = chart_df.sort_values(time_col)
+            fig = px.line(
+                chart_df,
+                x=time_col,
+                y=selected_chart_col,
+                title=f'{selected_chart_col} for {chart_df["Row Labels"].iloc[0]}',
+                labels={time_col: 'Month', selected_chart_col: selected_chart_col}
+            )
+            fig.update_layout(
+                xaxis_title='Month',
+                yaxis_title=selected_chart_col,
+                xaxis=dict(tickmode='array', tickvals=month_order),
+                yaxis=dict(zeroline=True, zerolinecolor='black', zerolinewidth=1),
+                showlegend=False
+            )
+        st.plotly_chart(fig, use_container_width=True)
     
 # Main logic to switch between pages
 if st.session_state['page'] == 'login':
@@ -1938,3 +2494,7 @@ elif st.session_state['page'] == 'monthly_performance':
     monthly_performance_page()
 elif st.session_state['page'] == 'sla_calculation':
     sla_calculation_page()
+elif st.session_state['page'] == 'top_clients':
+    top_clients_page()
+elif st.session_state['page'] == 'carbon_reduced':
+    carbon_reduced_page()
