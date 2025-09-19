@@ -636,6 +636,7 @@ def detailed_dashboard_page():
         Additional_Charge=('Additional Charge (KM, KG, Etc)', 'sum'),
         Total_Delivery_Revenue=('TOTAL DELIVERY REVENUE', 'sum'),
         EV_Reduction=('EV Reduction (3PL & KSJ)', 'sum'),
+        EV_Manpower=('EV Manpower', 'sum'),
         Claim_COD_Own_Risk=('Claim/COD/Own Risk', 'sum'),
         Hub_COD_Fee=('Hub, COD Fee (SBY) & Service Korlap', 'sum'),
         Lalamove_Bills=('Lalamove Bills (Invoicing to Client)', 'sum'),
@@ -671,6 +672,7 @@ def detailed_dashboard_page():
         Additional_Charge=('Additional Charge (KM, KG, Etc)', 'sum'),
         Total_Delivery_Revenue=('TOTAL DELIVERY REVENUE', 'sum'),
         EV_Reduction=('EV Reduction (3PL & KSJ)', 'sum'),
+        EV_Manpower=('EV Manpower', 'sum'),
         Claim_COD_Own_Risk=('Claim/COD/Own Risk', 'sum'),
         Hub_COD_Fee=('Hub, COD Fee (SBY) & Service Korlap', 'sum'),
         Lalamove_Bills=('Lalamove Bills (Invoicing to Client)', 'sum'),
@@ -719,7 +721,7 @@ def detailed_dashboard_page():
             last_week_orig = last_three_weeks.iloc[2]
             diff_data_earlier = {}
             for col in ['Delivery_Volume', 'Selling_Price_Regular_Rate', 'Additional_Charge', 'Total_Delivery_Revenue',
-                        'EV_Reduction', 'Claim_COD_Own_Risk', 'Hub_COD_Fee', 'Lalamove_Bills', 'Attribute_Fee',
+                        'EV_Reduction', 'EV_Manpower', 'Claim_COD_Own_Risk', 'Hub_COD_Fee', 'Lalamove_Bills', 'Attribute_Fee',
                         'Total_Revenue', 'Rider_Cost', 'Rider_Cost_Percent', 'Manpower_Cost', 'OEM_Cost',
                         'Mid_Mile_Cost', 'Add_3PL_Cost', 'DM_Program', 'Claim_Damaged_Loss', 'Outstanding_COD',
                         'Claim_Ownrisk', 'HUB_Cost', 'Other_Cost', 'Total_Cost', 'Profit_Value', 'Profit_Margins',
@@ -749,7 +751,7 @@ def detailed_dashboard_page():
             second_last_week = client_weekly_data[client_weekly_data['Week (by Year)'] == last_week_orig['Week (by Year)'] - 1].iloc[0] if last_week_orig['Week (by Year)'] > 1 else client_weekly_data.iloc[-2]
             diff_data = {}
             for col in ['Delivery_Volume', 'Selling_Price_Regular_Rate', 'Additional_Charge', 'Total_Delivery_Revenue',
-                        'EV_Reduction', 'Claim_COD_Own_Risk', 'Hub_COD_Fee', 'Lalamove_Bills', 'Attribute_Fee',
+                        'EV_Reduction', 'EV_Manpower', 'Claim_COD_Own_Risk', 'Hub_COD_Fee', 'Lalamove_Bills', 'Attribute_Fee',
                         'Total_Revenue', 'Rider_Cost', 'Rider_Cost_Percent', 'Manpower_Cost', 'OEM_Cost',
                         'Mid_Mile_Cost', 'Add_3PL_Cost', 'DM_Program', 'Claim_Damaged_Loss', 'Outstanding_COD',
                         'Claim_Ownrisk', 'HUB_Cost', 'Other_Cost', 'Total_Cost', 'Profit_Value', 'Profit_Margins',
@@ -780,7 +782,7 @@ def detailed_dashboard_page():
     # Select and rename columns for display
     final_df = final_df[[
         'Row Labels', 'Week (by Year)', 'Delivery_Volume', 'Selling_Price_Regular_Rate',
-        'Additional_Charge', 'Total_Delivery_Revenue', 'EV_Reduction', 'Claim_COD_Own_Risk',
+        'Additional_Charge', 'Total_Delivery_Revenue', 'EV_Reduction', 'EV_Manpower', 'Claim_COD_Own_Risk',
         'Hub_COD_Fee', 'Lalamove_Bills', 'Attribute_Fee', 'Total_Revenue', 'Rider_Cost',
         'Rider_Cost_Percent', 'Manpower_Cost', 'OEM_Cost', 'Mid_Mile_Cost', 'Add_3PL_Cost',
         'DM_Program', 'Claim_Damaged_Loss', 'Outstanding_COD', 'Claim_Ownrisk', 'HUB_Cost',
@@ -790,7 +792,7 @@ def detailed_dashboard_page():
     final_df.columns = [
         'Row Labels', 'Week (by Year)', 'Sum of Delivery Volume', 'Sum of Selling Price (Regular Rate)',
         'Sum of Additional Charge (KM, KG, Etc)', 'Sum of Total Sellings', 'Sum of EV Reduction (3PL & KSJ)',
-        'Sum of Claim/COD/Own Risk', 'Sum of Hub, COD Fee (SBY) & Service Korlap',
+        'Sum of EV Manpower', 'Sum of Claim/COD/Own Risk', 'Sum of Hub, COD Fee (SBY) & Service Korlap',
         'Sum of Lalamove Bills (Invoicing to Client)', 'Sum of Attribute Fee', 'Sum of Total Revenue',
         'Sum of Rider Cost', 'Sum of Rider Cost as % of Total Sellings', 'Sum of Manpower Cost',
         'Sum of OEM Cost', 'Sum of Mid-Mile/ Linehaul Cost', 'Sum of Add. 3PL Cost',
